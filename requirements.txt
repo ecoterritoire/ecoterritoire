@@ -1,0 +1,4 @@
+fastapi
+uvicorn[standard]
+influxdb
+psycopg2-binary
