@@ -1,10 +1,15 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
+
+from app.data.measurements import (
+    InMemoryMeasurementRepository,
+    MeasurementFilters,
+    MeasurementRepository,
+)
 
 
 app = FastAPI(title="Ecoterritoire API")
 
 
-# Exemples de mesures, en attendant la connexion a InfluxDB.
 MEASUREMENTS = [
     {
         "id": 1,
@@ -45,6 +50,11 @@ MEASUREMENTS = [
 ]
 
 
+measurement_repository: MeasurementRepository = InMemoryMeasurementRepository(
+    MEASUREMENTS
+)
+
+
 @app.get("/measurements")
 def list_measurements(
     polluant: str | None = None,
@@ -52,30 +62,34 @@ def list_measurements(
     type_mesure: str | None = None,
     code_site: str | None = None,
     site: str | None = None,
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=25, ge=1, le=100),
 ) -> dict[str, object]:
-    """Retourne les mesures avec des filtres correspondant aux tags InfluxDB."""
-    filters = {
-        "polluant": polluant,
-        "zone": zone,
-        "type_mesure": type_mesure,
-        "code_site": code_site,
-        "site": site,
+    """Retourne une page de mesures filtree par les tags InfluxDB."""
+    start = (page - 1) * limit
+    results = measurement_repository.find_page(
+        filters=MeasurementFilters(
+            polluant=polluant,
+            zone=zone,
+            type_mesure=type_mesure,
+            code_site=code_site,
+            site=site,
+        ),
+        offset=start,
+        limit=limit,
+    )
+
+    return {
+        "page": page,
+        "limit": limit,
+        "data": results,
     }
-    results = [
-        measurement
-        for measurement in MEASUREMENTS
-        if all(
-            value is None or measurement[tag].lower() == value.lower()
-            for tag, value in filters.items()
-        )
-    ]
-    return {"count": len(results), "data": results}
 
 
 @app.get("/measurements/{measurement_id}")
 def get_measurement(measurement_id: int) -> dict[str, object]:
     """Retourne une mesure par son identifiant d'exemple."""
-    for measurement in MEASUREMENTS:
-        if measurement["id"] == measurement_id:
-            return measurement
+    measurement = measurement_repository.find_by_id(measurement_id)
+    if measurement is not None:
+        return measurement
     return {"error": "Measurement not found"}
