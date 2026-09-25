@@ -1,3 +1,4 @@
+import secrets
 from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
@@ -42,3 +43,13 @@ def verifyToken(credentials: HTTPAuthorizationCredentials = Depends(security)) -
         )
     
     return user_data
+
+
+def generate_token(name: str) -> Token:
+    token = Token(
+        name=name,
+        hash_token=secrets.token_urlsafe(32),
+        created_at=datetime.now(),
+    )
+    FAKE_USERS_DB.append(token)
+    return token
