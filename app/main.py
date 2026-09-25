@@ -1,4 +1,5 @@
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query,Depends
+from app.security import TokenSecurity
 
 from app.data.measurements import (
     InMemoryMeasurementRepository,
@@ -7,7 +8,7 @@ from app.data.measurements import (
 )
 
 
-app = FastAPI(title="Ecoterritoire API")
+app = FastAPI(title="Ecoterritoire API", dependencies=[Depends(TokenSecurity.verifyToken)])
 
 
 MEASUREMENTS = [
