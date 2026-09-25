@@ -48,7 +48,7 @@ python scripts/create_token.py "Mon premier token"
 ```
 ou directement :
 ```bash
-python -m app.db "Mon premier token"
+python -m lib.db "Mon premier token"
 ```
 
 #### Option 2 : Via l'endpoint public `/auth/tokens`

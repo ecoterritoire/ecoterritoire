@@ -12,7 +12,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.db import DATABASE_URL, generate_new_token, init_db
+from lib.db import DATABASE_URL, generate_new_token, init_db
 
 
 def main() -> None:

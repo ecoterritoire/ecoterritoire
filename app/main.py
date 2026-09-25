@@ -3,8 +3,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
 
-from app.db import close_connection_pool, init_db
 from app.routes import auth, measurements
+from lib.db import close_connection_pool, init_db
 from lib.middleware import AuthTokenMiddleware
 
 
