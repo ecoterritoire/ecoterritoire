@@ -2,3 +2,6 @@ fastapi
 uvicorn[standard]
 influxdb
 psycopg2-binary
+influxdb_client
+tqdm
+pandas
