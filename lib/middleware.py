@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
 
-from app.db import hash_token, verify_token_hash
+from lib.db import hash_token, verify_token_hash
 
 logger = logging.getLogger(__name__)
 

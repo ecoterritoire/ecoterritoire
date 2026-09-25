@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from app.db import hash_token
+from lib.db import hash_token
 
 
 class TestAuthMiddleware(unittest.TestCase):
