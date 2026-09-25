@@ -1,4 +1,9 @@
 fastapi
 uvicorn[standard]
-influxdb
+influxdb-client
 psycopg2-binary
+pandas
+xlrd
+requests
+tqdm
+python-dotenv

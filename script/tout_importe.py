@@ -7,8 +7,11 @@ import requests
 from tqdm import tqdm
 from multiprocessing import Pool
 
-from influxdb_client import InfluxDBClient, Point, WritePrecision
-from influxdb_client.client.write_api import WriteOptions
+from influxdb_client.client.write.point import Point
+from influxdb_client.domain.write_precision import WritePrecision
+
+from lib import influxdb, postgres
+from lib.config import settings
 
 
 # ============================================================
@@ -21,31 +24,18 @@ BASE_URL = (
     "temps-reel"
 )
 
-# Années à importer
-ANNEES = [2021, 2022, 2023, 2024, 2025, 2026]
+# Années à importer. Exemple: IMPORT_YEARS=2025,2026.
+ANNEES = [
+    int(annee)
+    for annee in os.getenv("IMPORT_YEARS", "2025").split(",")
+    if annee.strip()
+]
 
 # Nombre de processus utilisés pour télécharger / traiter
 NB_PROCESSUS = os.cpu_count()
 
 # InfluxDB
-INFLUXDB_URL = os.getenv(
-    "INFLUXDB_URL",
-    "http://localhost:8086"
-)
-
-INFLUXDB_TOKEN = os.getenv("INFLUXDB_TOKEN")
-
-INFLUXDB_ORG = os.getenv(
-    "INFLUXDB_ORG",
-    "mon-org"
-)
-
-INFLUXDB_BUCKET = os.getenv(
-    "INFLUXDB_BUCKET",
-    "qualite-air"
-)
-
-MEASUREMENT = "pollution_air"
+MEASUREMENT = settings.influxdb_measurement
 
 
 # ============================================================
@@ -300,13 +290,42 @@ def dataframe_to_points(df):
     return points
 
 
+def dataframe_to_stations(df):
+    """Extrait les métadonnées de station disponibles dans le CSV source."""
+
+    columns = [
+        "code site",
+        "nom site",
+        "Organisme",
+        "code zas",
+        "Zas",
+        "type d'implantation",
+    ]
+    stations = df[columns].drop_duplicates(subset=["code site"])
+
+    return [
+        (
+            str(row["code site"]),
+            str(row["nom site"]),
+            None if pd.isna(row["Organisme"]) else str(row["Organisme"]),
+            None if pd.isna(row["code zas"]) else str(row["code zas"]),
+            None if pd.isna(row["Zas"]) else str(row["Zas"]),
+            None
+            if pd.isna(row["type d'implantation"])
+            else str(row["type d'implantation"]),
+        )
+        for _, row in stations.iterrows()
+        if pd.notna(row["code site"]) and pd.notna(row["nom site"])
+    ]
+
+
 # ============================================================
 # Programme principal
 # ============================================================
 
 def main():
 
-    if not INFLUXDB_TOKEN:
+    if not settings.influxdb_token:
         raise RuntimeError(
             "La variable d'environnement "
             "INFLUXDB_TOKEN n'est pas définie."
@@ -332,11 +351,7 @@ def main():
     # Connexion InfluxDB
     # --------------------------------------------------------
 
-    client = InfluxDBClient(
-        url=INFLUXDB_URL,
-        token=INFLUXDB_TOKEN,
-        org=INFLUXDB_ORG,
-    )
+    client = influxdb.get_client()
 
     # --------------------------------------------------------
     # Écriture ASYNCHRONE
@@ -344,15 +359,7 @@ def main():
     # Les points sont accumulés puis envoyés par lots.
     # --------------------------------------------------------
 
-    write_api = client.write_api(
-        write_options=WriteOptions(
-            batch_size=5000,
-            flush_interval=1000,
-            jitter_interval=0,
-            retry_interval=5000,
-            max_retries=5,
-        )
-    )
+    write_api = influxdb.get_write_api(client)
 
     # --------------------------------------------------------
     # Téléchargement + traitement parallèle
@@ -425,6 +432,8 @@ def main():
 
         points = dataframe_to_points(df)
 
+        postgres.upsert_stations(dataframe_to_stations(df))
+
         if not points:
             continue
 
@@ -433,8 +442,8 @@ def main():
         # ----------------------------------------------------
 
         write_api.write(
-            bucket=INFLUXDB_BUCKET,
-            org=INFLUXDB_ORG,
+            bucket=settings.influxdb_bucket,
+            org=settings.influxdb_org,
             record=points,
         )
 
