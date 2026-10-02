@@ -7,3 +7,8 @@ xlrd
 requests
 tqdm
 python-dotenv
+influxdb
+psycopg2-binary
+influxdb_client
+tqdm
+pandas

@@ -70,3 +70,37 @@ uvicorn app.main:app --reload
 ```
 
 Les identifiants par défaut sont modifiables dans `.env`.
+
+## Authentification et Middleware
+
+L'API utilise un middleware FastAPI (`AuthTokenMiddleware`) qui intercepte et sécurise toutes les opérations de l'API.
+
+- **Format requis** : En-tête HTTP `Authorization: Bearer <votre_token>`
+- **Sécurité et Hachage** : Les tokens bruts ne sont jamais stockés en clair. Le middleware calcule le hash **SHA-256** du token et valide son existence et son statut actif dans la table PostgreSQL `api_tokens`.
+- **Routes publiques exemptées** : `/health`, `/docs`, `/redoc`, `/openapi.json`, `/auth/tokens`.
+
+### Générer un token
+
+#### Option 1 : Via le script utilitaire
+```bash
+python scripts/create_token.py "Mon premier token"
+```
+ou directement :
+```bash
+python -m lib.db "Mon premier token"
+```
+
+#### Option 2 : Via l'endpoint public `/auth/tokens`
+```bash
+curl -X POST http://localhost:8000/auth/tokens \
+  -H "Content-Type: application/json" \
+  -d '{"description": "Client mobile"}'
+```
+
+### Effectuer des requêtes authentifiées
+
+```bash
+curl -H "Authorization: Bearer <votre_token>" http://localhost:8000/measurements
+```
+
+Dans l'interface Swagger (<http://localhost:8000/docs>), cliquez sur le bouton vert **Authorize** en haut à droite et renseignez votre token.

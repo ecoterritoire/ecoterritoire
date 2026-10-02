@@ -51,3 +51,13 @@ CREATE TABLE IF NOT EXISTS "stations" (
 CREATE INDEX IF NOT EXISTS stations_code_insee_idx ON "stations" ("code_insee");
 CREATE INDEX IF NOT EXISTS stations_code_dpt_idx ON "stations" ("code_dpt");
 CREATE INDEX IF NOT EXISTS stations_position_idx ON "stations" USING GIST ("position");
+
+
+CREATE TABLE IF NOT EXISTS "token" (
+	"id" serial NOT NULL UNIQUE,
+	"name" varchar(45) NOT NULL,
+	"hash_token" varchar(60) NOT NULL UNIQUE,
+	"created_at" date NOT NULL,
+	PRIMARY KEY ("id")
+);
+ALTER TABLE "communes" ADD CONSTRAINT "communes_fk2" FOREIGN KEY ("code_dpt") REFERENCES "departements"("code_dpt");
