@@ -50,8 +50,6 @@ services:
       INFLUXDB_BUCKET: ${INFLUXDB_BUCKET:-qualite-air}
     ports:
       - "8000:8000"
-    volumes:
-      -  .:/app
     depends_on:
       db:
         condition: service_healthy
@@ -64,7 +62,7 @@ services:
       context: .
       dockerfile: docker/web/Dockerfile
     ports:
-      - "8090:80"
+      - "8080:80"
     depends_on:
       - api
 
