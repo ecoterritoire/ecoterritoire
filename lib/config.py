@@ -13,7 +13,7 @@ class Settings:
         "postgresql://ecoterritoire:ecoterritoire@localhost:5433/ecoterritoire",
     )
     influxdb_url: str = os.getenv("INFLUXDB_URL", "http://localhost:8086")
-    influxdb_token: str = os.getenv("INFLUXDB_TOKEN", "")
+    influxdb_token: str = os.getenv("INFLUXDB_TOKEN", "ecoterritoire-dev-token")
     influxdb_org: str = os.getenv("INFLUXDB_ORG", "ecoterritoire")
     influxdb_bucket: str = os.getenv("INFLUXDB_BUCKET", "qualite-air")
     influxdb_measurement: str = os.getenv(

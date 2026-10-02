@@ -1,6 +1,8 @@
 import os
+import sys
 from io import BytesIO
 from datetime import date, timedelta
+from pathlib import Path
 
 import pandas as pd
 import requests
@@ -9,6 +11,10 @@ from multiprocessing import Pool
 
 from influxdb_client.client.write.point import Point
 from influxdb_client.domain.write_precision import WritePrecision
+
+# Permet l'exécution directe depuis le dossier `script/`.
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from lib import influxdb, postgres
 from lib.config import settings
