@@ -4,6 +4,7 @@ import os
 import secrets
 from collections.abc import Generator
 from contextlib import contextmanager
+from pathlib import Path
 
 from typing import Any
 
@@ -24,6 +25,7 @@ DATABASE_URL = os.getenv(
 )
 
 _connection_pool: pool.ThreadedConnectionPool | None = None
+SEED_FILE = Path(__file__).resolve().parent.parent / "sql" / "seed_postgres.sql"
 
 
 def get_connection_pool() -> Any:
@@ -67,25 +69,35 @@ def hash_token(raw_token: str) -> str:
 
 
 def init_db() -> None:
-    """Initialise les tables necessaires dans PostgreSQL (table api_tokens)."""
-    create_table_query = """
-    CREATE TABLE IF NOT EXISTS api_tokens (
-        id SERIAL PRIMARY KEY,
-        token_hash VARCHAR(64) UNIQUE NOT NULL,
-        description VARCHAR(255) DEFAULT '',
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-        last_used_at TIMESTAMP WITH TIME ZONE,
-        is_active BOOLEAN DEFAULT TRUE
-    );
-    CREATE INDEX IF NOT EXISTS idx_api_tokens_hash ON api_tokens (token_hash);
-    """
+    """Execute le seed SQL idempotent pour les bases deja existantes."""
     try:
+        seed_sql = SEED_FILE.read_text(encoding="utf-8")
         with get_db_cursor() as cur:
-            cur.execute(create_table_query)
-        logger.info("Table api_tokens initialisee avec succes dans PostgreSQL.")
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS admin_sessions (
+                    id bigserial PRIMARY KEY,
+                    user_id bigint NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+                    token_hash varchar(64) NOT NULL UNIQUE,
+                    created_at timestamptz NOT NULL DEFAULT now(),
+                    last_used_at timestamptz,
+                    expires_at timestamptz NOT NULL,
+                    is_active boolean NOT NULL DEFAULT true
+                );
+                CREATE INDEX IF NOT EXISTS admin_sessions_active_hash_idx
+                    ON admin_sessions (token_hash) WHERE is_active = true;
+                DELETE FROM api_tokens
+                WHERE user_id IS NOT NULL
+                   OR description LIKE 'Back-office login:%%';
+                """
+            )
+            cur.execute(seed_sql)
+        logger.info("Seed PostgreSQL execute avec succes depuis %s.", SEED_FILE)
+    except OSError as exc:
+        logger.error("Impossible de lire le seed PostgreSQL %s: %s", SEED_FILE, exc)
     except Exception as exc:
         logger.warning(
-            "Impossible d'initialiser la base de donnees PostgreSQL: %s", exc
+            "Impossible d'executer le seed PostgreSQL: %s", exc
         )
 
 
@@ -95,13 +107,16 @@ def verify_token_hash(token_hash: str) -> dict[str, object] | None:
     Si valide, met a jour last_used_at et retourne les informations du token.
     """
     select_query = """
-    SELECT id, token_hash, description, created_at, last_used_at, is_active
-    FROM api_tokens
-    WHERE token_hash = %s AND is_active = TRUE;
+    SELECT
+        t.id, t.token_hash, t.description, t.created_at,
+        t.last_used_at, t.is_active, t.usage_count, u.role
+    FROM api_tokens AS t
+    LEFT JOIN app_users AS u ON u.id = t.user_id
+    WHERE t.token_hash = %s AND t.is_active = TRUE;
     """
     update_query = """
     UPDATE api_tokens
-    SET last_used_at = CURRENT_TIMESTAMP
+    SET last_used_at = CURRENT_TIMESTAMP, usage_count = usage_count + 1
     WHERE id = %s;
     """
     try:
@@ -120,25 +135,90 @@ def verify_token_hash(token_hash: str) -> dict[str, object] | None:
                 "created_at": str(row[3]),
                 "last_used_at": str(row[4]),
                 "is_active": row[5],
+                "usage_count": row[6],
+                "role": row[7],
             }
     except Exception as exc:
         logger.error("Erreur lors de la verification du token en base: %s", exc)
         return None
 
 
-def store_token(raw_token: str, description: str = "") -> dict[str, object]:
+def create_admin_session(
+    raw_token: str,
+    user_id: int,
+    expires_at: str,
+) -> None:
+    query = """
+    DELETE FROM admin_sessions
+    WHERE expires_at <= CURRENT_TIMESTAMP OR is_active = FALSE;
+    INSERT INTO admin_sessions (user_id, token_hash, expires_at)
+    VALUES (%s, %s, %s);
+    """
+    with get_db_cursor() as cur:
+        cur.execute(query, (user_id, hash_token(raw_token), expires_at))
+
+
+def verify_admin_session(token_hash: str) -> dict[str, object] | None:
+    query = """
+    SELECT s.id, s.user_id, s.token_hash, u.username, u.role
+    FROM admin_sessions AS s
+    JOIN app_users AS u ON u.id = s.user_id
+    WHERE s.token_hash = %s
+      AND s.is_active = TRUE
+      AND u.is_active = TRUE
+      AND s.expires_at > CURRENT_TIMESTAMP;
+    """
+    update_query = """
+    UPDATE admin_sessions
+    SET last_used_at = CURRENT_TIMESTAMP
+    WHERE token_hash = %s;
+    """
+    cleanup_query = """
+    DELETE FROM admin_sessions
+    WHERE expires_at <= CURRENT_TIMESTAMP OR is_active = FALSE;
+    """
+    with get_db_cursor() as cur:
+        cur.execute(cleanup_query)
+        cur.execute(query, (token_hash,))
+        row = cur.fetchone()
+        if row is None:
+            return None
+        cur.execute(update_query, (token_hash,))
+        return {
+            "id": row[0],
+            "user_id": row[1],
+            "token_hash": row[2],
+            "username": row[3],
+            "role": row[4],
+            "session": True,
+        }
+
+
+def revoke_admin_session(token_hash: str) -> None:
+    with get_db_cursor() as cur:
+        cur.execute(
+            "UPDATE admin_sessions SET is_active = FALSE WHERE token_hash = %s",
+            (token_hash,),
+        )
+
+
+def store_token(
+    raw_token: str,
+    description: str = "",
+    user_id: int | None = None,
+) -> dict[str, object]:
     """Hache un token brut et l'enregistre dans PostgreSQL.
 
     Retourne l'enregistrement cree (sans stocker le token en clair).
     """
     token_hash = hash_token(raw_token)
     insert_query = """
-    INSERT INTO api_tokens (token_hash, description)
-    VALUES (%s, %s)
-    RETURNING id, token_hash, description, created_at, is_active;
+    INSERT INTO api_tokens (token_hash, description, user_id)
+    VALUES (%s, %s, %s)
+    RETURNING id, token_hash, description, created_at, is_active, user_id;
     """
     with get_db_cursor() as cur:
-        cur.execute(insert_query, (token_hash, description))
+        cur.execute(insert_query, (token_hash, description, user_id))
         row = cur.fetchone()
         if row is None:
             raise RuntimeError("Echec de l'insertion du token en base.")
@@ -148,13 +228,21 @@ def store_token(raw_token: str, description: str = "") -> dict[str, object]:
             "description": row[2],
             "created_at": str(row[3]),
             "is_active": row[4],
+            "user_id": row[5],
         }
 
 
-def generate_new_token(description: str = "") -> tuple[str, dict[str, object]]:
+def generate_new_token(
+    description: str = "",
+    user_id: int | None = None,
+) -> tuple[str, dict[str, object]]:
     """Genere un token aleatoire securise, calcule son hash et le stocke dans PostgreSQL."""
     raw_token = f"eco_{secrets.token_urlsafe(32)}"
-    record = store_token(raw_token=raw_token, description=description)
+    record = store_token(
+        raw_token=raw_token,
+        description=description,
+        user_id=user_id,
+    )
     return raw_token, record
 
 

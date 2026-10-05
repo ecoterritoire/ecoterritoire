@@ -8,8 +8,6 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-ecoterritoire}
       POSTGRES_USER: ${POSTGRES_USER:-ecoterritoire}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ecoterritoire}
-    ports:
-      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -27,8 +25,6 @@ services:
       DOCKER_INFLUXDB_INIT_ORG: ${INFLUXDB_ORG:-ecoterritoire}
       DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUXDB_BUCKET:-qualite-air}
       DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUXDB_TOKEN:-ecoterritoire-dev-token}
-    ports:
-      - "8086:8086"
     volumes:
       - influxdb_data:/var/lib/influxdb2
       - influxdb_config:/etc/influxdb2
@@ -38,31 +34,43 @@ services:
       timeout: 5s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   api:
     build:
       context: .
       dockerfile: Dockerfile
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-ecoterritoire}:${POSTGRES_PASSWORD:-ecoterritoire}@db:5432/${POSTGRES_DB:-ecoterritoire}
+      REDIS_URL: redis://redis:6379/0
+      AUTH_CACHE_TTL_SECONDS: ${AUTH_CACHE_TTL_SECONDS:-60}
+      ADMIN_SESSION_TTL_SECONDS: ${ADMIN_SESSION_TTL_SECONDS:-28800}
       INFLUXDB_URL: http://influxdb:8086
       INFLUXDB_TOKEN: ${INFLUXDB_TOKEN:-ecoterritoire-dev-token}
       INFLUXDB_ORG: ${INFLUXDB_ORG:-ecoterritoire}
       INFLUXDB_BUCKET: ${INFLUXDB_BUCKET:-qualite-air}
-    ports:
-      - "8000:8000"
     depends_on:
       db:
         condition: service_healthy
       influxdb:
         condition: service_healthy
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+      redis:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
 
   web:
     build:
       context: .
       dockerfile: docker/web/Dockerfile
-    ports:
-      - "8080:80"
     depends_on:
       - api
 
@@ -70,4 +78,5 @@ volumes:
   postgres_data:
   influxdb_data:
   influxdb_config:
+  redis_data:
   

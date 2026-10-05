@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ecoterritoire - Administration</title>
+  <link rel="stylesheet" href="{{ url_for('admin_static', path='admin.css') }}">
+</head>
+<body>
+  <main>
+    <section id="login" class="card login-card">
+      <p class="eyebrow">Administration</p>
+      <h1>Back-office API</h1>
+      <form id="login-form">
+        <label>Utilisateur
+          <input name="username" value="admin" autocomplete="username" required>
+        </label>
+        <label>Mot de passe
+          <input name="password" type="password" value="admin" autocomplete="current-password" required>
+        </label>
+        <button type="submit">Connexion</button>
+      </form>
+      <p id="error" class="error" role="alert"></p>
+    </section>
+
+    <section id="dashboard" hidden>
+      <header class="admin-header">
+        <div>
+          <p class="eyebrow">Administration</p>
+          <h1>Gestion de l’API</h1>
+        </div>
+        <button id="logout" class="secondary" type="button">Déconnexion</button>
+      </header>
+      <nav class="tabs" aria-label="Sections du back-office">
+        <button class="tab active" data-view="overview" type="button">Tableau de bord</button>
+        <button class="tab" data-view="keys" type="button">Clés API</button>
+        <button class="tab" data-view="create" type="button">Créer une clé</button>
+      </nav>
+
+      <section id="overview-view" class="view">
+        <div id="stats" class="stats"></div>
+        <section class="card overview-card">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Activité</p>
+              <h2>Suivi des clés publiques</h2>
+            </div>
+            <button id="refresh-overview" class="secondary" type="button">Actualiser</button>
+          </div>
+          <p class="muted">Les connexions du back-office ne sont pas incluses dans ces chiffres.</p>
+        </section>
+      </section>
+
+      <section id="keys-view" class="view" hidden>
+        <section class="card">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Accès</p>
+              <h2>Clés API</h2>
+            </div>
+            <button id="refresh-keys" class="secondary" type="button">Actualiser</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Description</th>
+                  <th>Création</th>
+                  <th>Dernière utilisation</th>
+                  <th>Utilisations</th>
+                  <th>Statut</th>
+                </tr>
+              </thead>
+              <tbody id="tokens"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section id="create-view" class="view" hidden>
+        <section class="card form-card">
+          <p class="eyebrow">Nouvel accès</p>
+          <h2>Créer une clé API</h2>
+          <p class="muted">La clé complète ne sera affichée qu’une seule fois.</p>
+          <form id="create-key-form">
+            <label>Description
+              <input name="description" maxlength="255" placeholder="Ex. Application mobile" required>
+            </label>
+            <button type="submit">Générer la clé</button>
+          </form>
+          <div id="created-key" class="created-key" hidden>
+            <strong>Copiez cette clé maintenant</strong>
+            <code id="created-key-value"></code>
+            <button id="copy-key" class="secondary" type="button">Copier</button>
+          </div>
+          <p id="create-error" class="error" role="alert"></p>
+        </section>
+      </section>
+    </section>
+  </main>
+  <script src="{{ url_for('admin_static', path='admin.js') }}"></script>
+</body>
+</html>

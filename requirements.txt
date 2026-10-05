@@ -1,4 +1,5 @@
 fastapi
+jinja2
 uvicorn[standard]
 influxdb-client
 psycopg2-binary
@@ -7,6 +8,7 @@ xlrd
 requests
 tqdm
 python-dotenv
+redis
 influxdb
 psycopg2-binary
 influxdb_client

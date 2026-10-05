@@ -1,5 +1,49 @@
 CREATE EXTENSION IF NOT EXISTS postgis;
 
+CREATE TABLE IF NOT EXISTS "app_users" (
+	"id" bigserial PRIMARY KEY,
+	"username" varchar(128) NOT NULL UNIQUE,
+	"password_hash" varchar(255) NOT NULL,
+	"role" varchar(32) NOT NULL DEFAULT 'admin',
+	"created_at" timestamptz NOT NULL DEFAULT now(),
+	"last_login_at" timestamptz,
+	"is_active" boolean NOT NULL DEFAULT true
+);
+
+CREATE TABLE IF NOT EXISTS "api_tokens" (
+	"id" bigserial PRIMARY KEY,
+	"token_hash" varchar(64) NOT NULL UNIQUE,
+	"description" varchar(255) NOT NULL DEFAULT '',
+	"created_at" timestamptz NOT NULL DEFAULT now(),
+	"last_used_at" timestamptz,
+	"is_active" boolean NOT NULL DEFAULT true,
+	"user_id" bigint REFERENCES "app_users"("id"),
+	"usage_count" bigint NOT NULL DEFAULT 0
+);
+
+ALTER TABLE "api_tokens"
+	ADD COLUMN IF NOT EXISTS "user_id" bigint REFERENCES "app_users"("id");
+ALTER TABLE "api_tokens"
+	ADD COLUMN IF NOT EXISTS "usage_count" bigint NOT NULL DEFAULT 0;
+
+CREATE INDEX IF NOT EXISTS api_tokens_active_hash_idx
+	ON "api_tokens" ("token_hash")
+	WHERE "is_active" = true;
+
+CREATE TABLE IF NOT EXISTS "admin_sessions" (
+	"id" bigserial PRIMARY KEY,
+	"user_id" bigint NOT NULL REFERENCES "app_users"("id") ON DELETE CASCADE,
+	"token_hash" varchar(64) NOT NULL UNIQUE,
+	"created_at" timestamptz NOT NULL DEFAULT now(),
+	"last_used_at" timestamptz,
+	"expires_at" timestamptz NOT NULL,
+	"is_active" boolean NOT NULL DEFAULT true
+);
+
+CREATE INDEX IF NOT EXISTS admin_sessions_active_hash_idx
+	ON "admin_sessions" ("token_hash")
+	WHERE "is_active" = true;
+
 CREATE TABLE IF NOT EXISTS "departements" (
 	"code_dpt" varchar(3) NOT NULL UNIQUE,
 	"nom" varchar(255) NOT NULL,
@@ -51,13 +95,3 @@ CREATE TABLE IF NOT EXISTS "stations" (
 CREATE INDEX IF NOT EXISTS stations_code_insee_idx ON "stations" ("code_insee");
 CREATE INDEX IF NOT EXISTS stations_code_dpt_idx ON "stations" ("code_dpt");
 CREATE INDEX IF NOT EXISTS stations_position_idx ON "stations" USING GIST ("position");
-
-
-CREATE TABLE IF NOT EXISTS "token" (
-	"id" serial NOT NULL UNIQUE,
-	"name" varchar(45) NOT NULL,
-	"hash_token" varchar(60) NOT NULL UNIQUE,
-	"created_at" date NOT NULL,
-	PRIMARY KEY ("id")
-);
-ALTER TABLE "communes" ADD CONSTRAINT "communes_fk2" FOREIGN KEY ("code_dpt") REFERENCES "departements"("code_dpt");

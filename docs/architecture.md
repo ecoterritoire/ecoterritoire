@@ -44,14 +44,17 @@ flowchart TB
     pgvolume[(postgres_data)]
     influxvolume[(influxdb_data)]
     configvolume[(influxdb_config)]
+    redisvolume[(redis_data)]
 
     browser --> web
     web -->|/api/*| api
     api -->|db:5432| db
     api -->|influxdb:8086| influx
+    api -->|redis:6379| redis
     db --- pgvolume
     influx --- influxvolume
     influx --- configvolume
+    redis --- redisvolume
 ```
 
 Services définis dans [docker-compose.yml](../docker-compose.yml) :
@@ -62,8 +65,37 @@ Services définis dans [docker-compose.yml](../docker-compose.yml) :
 | `web` | Dashboard statique + reverse-proxy | `http://localhost:8080` |
 | `db` | PostgreSQL avec PostGIS | `localhost:5433` |
 | `influxdb` | Base de séries temporelles | `http://localhost:8086` |
+| `redis` | Cache des tokens et sessions admin | `localhost:6379` |
+| `redis-insight` | Interface de développement Redis | `http://localhost:5540` |
 
 Les bases utilisent des volumes Docker persistants. Le schéma PostgreSQL est intégré dans l'image définie par [docker/postgres/Dockerfile](../docker/postgres/Dockerfile).
+
+### Environnements Docker
+
+La configuration commune est dans [docker-compose.yml](../docker-compose.yml).
+Les surcharges sont séparées :
+
+- [docker-compose.dev.yml](../docker-compose.dev.yml) expose les services
+  localement, active le rechargement automatique de FastAPI et ajoute
+  RedisInsight ;
+- [docker-compose.prod.yml](../docker-compose.prod.yml) utilise plusieurs
+  workers, des redémarrages automatiques et n'expose que le service web.
+
+Commandes recommandées :
+
+```bash
+# Développement
+./script/docker.sh dev
+BUILD=1 ./script/docker.sh dev
+
+# Production (variables obligatoires dans .env)
+./script/docker.sh prod
+
+# Etat et logs
+ENV=dev ./script/docker.sh ps
+ENV=dev ./script/docker.sh logs
+ENV=dev ./script/docker.sh down
+```
 
 ## 3. Flux d'importation
 
@@ -153,9 +185,40 @@ erDiagram
         geometry position
         timestamptz updated_at
     }
+    APP_USERS {
+        bigint id PK
+        varchar username UK
+        varchar password_hash
+        varchar role
+        boolean is_active
+    }
+    API_TOKENS {
+        bigint id PK
+        varchar token_hash UK
+        varchar description
+        timestamptz created_at
+        timestamptz last_used_at
+        boolean is_active
+        bigint usage_count
+    }
+    ADMIN_SESSIONS {
+        bigint id PK
+        bigint user_id FK
+        varchar token_hash UK
+        timestamptz expires_at
+        boolean is_active
+    }
+    APP_USERS ||--o{ ADMIN_SESSIONS : ouvre
 ```
 
 La table `stations` est définie dans [sql/script_postgres.sql](../sql/script_postgres.sql). Le champ `code_site` est la clé de rapprochement entre PostgreSQL et InfluxDB.
+
+Les tables d'authentification sont également définies dans
+[sql/script_postgres.sql](../sql/script_postgres.sql). Le compte de
+démonstration `admin/admin` et les deux clés de développement sont insérés par
+[sql/seed_postgres.sql](../sql/seed_postgres.sql). Le seed est idempotent grâce
+aux contraintes uniques et à `ON CONFLICT DO NOTHING`, et `lib.db.init_db()`
+l'exécute aussi pour les volumes PostgreSQL déjà existants.
 
 Les champs `code_insee`, `code_dpt` et les relations administratives sont prêts, mais leur alimentation dépend d'une source géographique complémentaire au référentiel des coordonnées.
 
@@ -222,6 +285,9 @@ INFLUXDB_BUCKET
 INFLUXDB_MEASUREMENT
 STATION_METADATA_URL
 IMPORT_YEARS
+REDIS_URL
+AUTH_CACHE_TTL_SECONDS
+ADMIN_SESSION_TTL_SECONDS
 ```
 
 ## 6. Routes principales
@@ -240,6 +306,62 @@ IMPORT_YEARS
 |---|---|---|---|
 | `GET` | `/stations` | `code_site`, `code_dpt` | Liste les stations PostgreSQL/PostGIS |
 | `GET` | `/pollutants` | aucun | Liste les polluants présents dans InfluxDB |
+
+Toutes les routes de données sont protégées par un token Bearer :
+
+```http
+Authorization: Bearer <token>
+```
+
+Le dashboard de développement utilise `eco_public_dashboard_dev`. Le seed
+initialise aussi `eco_mobile_client_dev` pour le client mobile de
+développement. Les tokens bruts ne sont jamais stockés en base : seul leur
+hash SHA-256 est enregistré dans `api_tokens`.
+
+### Création de clés API
+
+| Méthode | Route | Description |
+|---|---|---|
+| `POST` | `/auth/token` | Crée une clé API et retourne le token brut une seule fois |
+| `POST` | `/auth/tokens` | Alias historique non affiché dans OpenAPI |
+
+Corps de la requête :
+
+```json
+{
+  "description": "Application mobile"
+}
+```
+
+La création publique de token est destinée au développement. En production,
+la création doit être réservée au back-office ou protégée par une politique
+d'administration adaptée.
+
+### Back-office
+
+Le back-office est servi par FastAPI à l'adresse
+<http://localhost:8000/admin>. Il utilise Jinja2 et les fichiers :
+
+- [app/templates/admin.html](../app/templates/admin.html) ;
+- [app/static/admin.css](../app/static/admin.css) ;
+- [app/static/admin.js](../app/static/admin.js).
+
+Fonctionnalités :
+
+| Méthode | Route | Description |
+|---|---|---|
+| `POST` | `/admin/login` | Authentifie un administrateur et crée une session |
+| `POST` | `/admin/logout` | Révoque immédiatement la session courante |
+| `GET` | `/admin/stats` | Statistiques des clés API uniquement |
+| `GET` | `/admin/tokens` | Liste les clés API, sans les sessions admin |
+| `POST` | `/admin/api-keys` | Crée une clé API depuis le back-office |
+
+Les sessions ne sont pas des clés API. Elles sont stockées dans
+`admin_sessions`, avec une date d'expiration configurable par
+`ADMIN_SESSION_TTL_SECONDS` (8 heures par défaut). Les sessions expirées ou
+révoquées sont nettoyées automatiquement. Les clés API sont stockées dans
+`api_tokens` et les anciennes sessions admin de cette table sont supprimées
+par `init_db()`.
 
 ### Pollution
 
@@ -305,6 +427,11 @@ La carte affiche :
 - une couleur verte, orange ou rouge quand un indice comparable est disponible ;
 - un point gris lorsqu'aucune mesure n'est disponible ;
 - un popup avec le détail de la station.
+
+Le dashboard appelle `/api/stations`, `/api/pollutants`,
+`/api/pollution/map` et `/api/pollution/summary`. Nginx retire le préfixe
+`/api` avant de relayer la requête vers FastAPI et conserve les en-têtes
+d'authentification.
 
 ## 8. État actuel et prochaines évolutions
 

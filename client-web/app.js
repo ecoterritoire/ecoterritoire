@@ -9,6 +9,8 @@ let refreshTimer;
 
 const $ = (selector) => document.querySelector(selector);
 const API_BASE = '/api';
+// Cle publique de developpement : elle est visible par tous les visiteurs.
+const PUBLIC_API_TOKEN = 'eco_public_dashboard_dev';
 
 function formatDate(value) {
   return new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -25,7 +27,9 @@ function offsetFromDate(value) {
 }
 
 async function getJson(url) {
-  const response = await fetch(`${API_BASE}${url}`);
+  const response = await fetch(`${API_BASE}${url}`, {
+    headers: { Authorization: `Bearer ${PUBLIC_API_TOKEN}` },
+  });
   if (!response.ok) throw new Error(`Erreur API (${response.status})`);
   return response.json();
 }
