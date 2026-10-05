@@ -4,7 +4,7 @@ from unittest.mock import patch
 from lib.db import hash_token
 
 
-class TestAuthMiddleware(unittest.TestCase):
+class TestAuthDependency(unittest.TestCase):
     def test_hash_token_sha256(self):
         """Verifie que le hachage d'un token produit bien une chaine hexadecimale SHA-256 de 64 caracteres."""
         token = "eco_test_secret_token_123"
@@ -41,7 +41,7 @@ class TestAuthMiddleware(unittest.TestCase):
         self.assertIn("Invalid Authorization header format", res_bad_format.json()["detail"])
 
         # 4. Route protegee avec token inexistant / invalide
-        with patch("lib.middleware.verify_token_hash", return_value=None):
+        with patch("app.security.auth.verify_token_hash", return_value=None):
             res_invalid = client.get(
                 "/measurements", headers={"Authorization": "Bearer invalid_token"}
             )
@@ -62,7 +62,11 @@ class TestAuthMiddleware(unittest.TestCase):
             "last_used_at": None,
             "is_active": True,
         }
-        with patch("lib.middleware.verify_token_hash", return_value=mock_record):
+        with patch(
+            "app.security.auth.verify_token_hash", return_value=mock_record
+        ), patch(
+            "app.routes.pollution.influxdb.query_timeline", return_value=[]
+        ):
             res_valid = client.get(
                 "/measurements", headers={"Authorization": f"Bearer {raw_token}"}
             )

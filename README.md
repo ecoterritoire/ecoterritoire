@@ -71,13 +71,19 @@ uvicorn app.main:app --reload
 
 Les identifiants par défaut sont modifiables dans `.env`.
 
-## Authentification et Middleware
+## Authentification
 
-L'API utilise un middleware FastAPI (`AuthTokenMiddleware`) qui intercepte et sécurise toutes les opérations de l'API.
+Les routeurs protégés utilisent la dépendance FastAPI `get_current_token` définie dans
+`app/security/auth.py`. Le token est vérifié dans PostgreSQL via `lib.db`; aucun
+utilisateur ou token n'est conservé en mémoire.
 
 - **Format requis** : En-tête HTTP `Authorization: Bearer <votre_token>`
-- **Sécurité et Hachage** : Les tokens bruts ne sont jamais stockés en clair. Le middleware calcule le hash **SHA-256** du token et valide son existence et son statut actif dans la table PostgreSQL `api_tokens`.
-- **Routes publiques exemptées** : `/health`, `/docs`, `/redoc`, `/openapi.json`, `/auth/tokens`.
+- **Sécurité et Hachage** : Les tokens bruts ne sont jamais stockés en clair. La dépendance d'authentification calcule le hash **SHA-256** du token et valide son existence et son statut actif dans la table PostgreSQL `api_tokens`.
+- **Routes publiques** : `/health`, `/docs`, `/redoc`, `/openapi.json`, `/auth/token`.
+- **Création d'un token** : `POST /auth/token` (alias historique : `POST /auth/tokens`).
+
+Les endpoints sont séparés par domaine dans `app/routes/` :
+`auth.py`, `stations.py`, `pollutants.py`, `pollution.py` et `measurements.py`.
 
 ### Générer un token
 
@@ -90,9 +96,9 @@ ou directement :
 python -m lib.db "Mon premier token"
 ```
 
-#### Option 2 : Via l'endpoint public `/auth/tokens`
+#### Option 2 : Via l'endpoint public `/auth/token`
 ```bash
-curl -X POST http://localhost:8000/auth/tokens \
+curl -X POST http://localhost:8000/auth/token \
   -H "Content-Type: application/json" \
   -d '{"description": "Client mobile"}'
 ```
