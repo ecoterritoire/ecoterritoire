@@ -10,7 +10,7 @@ load_dotenv()
 class Settings:
     database_url: str = os.getenv(
         "DATABASE_URL",
-        "postgresql://ecoterritoire:ecoterritoire@localhost:5433/ecoterritoire",
+        "postgresql://localhost:5433/ecoterritoire",
     )
     redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
     auth_cache_ttl_seconds: int = int(os.getenv("AUTH_CACHE_TTL_SECONDS", "60"))
