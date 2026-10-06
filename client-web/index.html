@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="fr">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Ecoterritoire | Qualite de l'air</title>
+	<link rel="preconnect" href="https://unpkg.com">
+	<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+	<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+	<header class="topbar">
+		<a class="brand" href="/"><span class="brand-mark" aria-hidden="true">AQ</span><span>Ecoterritoire</span></a>
+		<span class="status"><span class="status-dot"></span> Donnees 2025</span>
+	</header>
+
+	<main class="dashboard">
+		<section class="intro">
+			<div><p class="eyebrow">Observatoire national</p><h1>La qualite de l'air, <em>jour apres jour.</em></h1><p class="lede">Explorez les niveaux mesures dans les stations francaises et suivez leur evolution dans le temps.</p></div>
+			<div class="intro-date" id="selected-date">02 JAN 2025</div>
+		</section>
+
+		<section class="metrics" aria-label="Synthese du jour">
+			<div class="summary-heading"><p class="eyebrow">Synthese du jour</p><h2>Comprendre la qualite de l'air</h2><label>Polluant analyse<select id="summary-pollutant-select"><option value="">Tous les polluants</option></select></label></div>
+			<div class="summary-content" id="summary-content"><p class="summary-empty">Selectionnez une date pour charger la synthese.</p></div>
+		</section>
+
+		<section class="visual-grid">
+			<article class="panel map-panel"><div class="panel-heading"><div><p class="eyebrow">France</p><h2>Lecture geographique</h2></div><span class="panel-note" id="map-note">Chargement...</span></div><div id="map" aria-label="Carte des stations de mesure"></div><div class="map-legend"><span><i class="legend-low"></i>Faible</span><span><i class="legend-mid"></i>Intermediaire</span><span><i class="legend-high"></i>Elevee</span><span><i class="legend-none"></i>Pas de mesure</span><small>Indice multi-polluants relatif quand &laquo; Tous les polluants &raquo; est selectionne</small></div><div class="empty-map" id="empty-map" hidden><strong>Carte en attente de geolocalisation</strong><span>Les stations sont chargees, mais leurs coordonnees ne sont pas encore disponibles.</span></div></article>
+			<article class="panel timeline-panel"><div class="panel-heading"><div><p class="eyebrow">Navigation temporelle</p><h2>Faire defiler les mesures</h2></div><span class="unit-badge">2025</span></div><div class="scrubber-date" id="scrubber-date">02 JAN 2025</div><p class="scrubber-copy">Faites glisser le curseur pour observer la repartition du polluant selectionne a chaque date.</p><div class="timeline-range"><span>01 JAN</span><input id="timeline-input" type="range" min="0" max="364" value="1" aria-label="Date observee en 2025"><span>31 DEC</span></div><div class="scrubber-meta"><span id="scrubber-index">Jour 2 sur 365</span><strong id="chart-value">357 mesures</strong></div><div class="scrubber-track"><span></span></div></article>
+		</section>
+	</main>
+
+	<footer>Ecoterritoire <span>•</span> Qualite de l'air en France</footer>
+	<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="/app.js"></script>
+</body>
+</html>

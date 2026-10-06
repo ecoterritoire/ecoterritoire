@@ -9,6 +9,9 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
+COPY lib ./lib
+COPY sql ./sql
+COPY script ./script
 
 EXPOSE 8000
 
