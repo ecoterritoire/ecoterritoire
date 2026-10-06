@@ -28,8 +28,3 @@ app.include_router(stations.router)
 app.include_router(pollutants.router)
 app.include_router(pollution.router)
 app.include_router(measurements.router)
-
-
-@app.get("/health", tags=["health"])
-def health_check() -> dict[str, str]:
-    return {"status": "ok"}
