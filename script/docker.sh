@@ -17,7 +17,7 @@ Usage:
 
 Variables:
   ENV=dev|prod                 Environnement utilise par down, logs et ps
-  BUILD=1                      Reconstruire les images pour dev/prod
+  BUILD=1                      Reconstruire les images pour dev
 EOF
 }
 
@@ -26,7 +26,11 @@ action="${1:-}"
 
 case "$environment" in
   dev|prod)
-    COMPOSE_FILES+=(-f "docker-compose.${environment}.yml")
+    if [[ "$environment" == "dev" ]]; then
+      COMPOSE_FILES+=(-f docker-compose.dev.yml)
+    else
+      COMPOSE_FILES=(-f docker/example/docker-compose.yml)
+    fi
     ;;
   *)
     echo "Environnement invalide: $environment (attendu: dev ou prod)" >&2
@@ -37,13 +41,18 @@ esac
 case "$action" in
   dev|prod)
     if [[ "$action" != "$environment" ]]; then
-      COMPOSE_FILES=(-f docker-compose.yml -f "docker-compose.${action}.yml")
+      if [[ "$action" == "dev" ]]; then
+        COMPOSE_FILES=(-f docker-compose.yml -f docker-compose.dev.yml)
+      else
+        COMPOSE_FILES=(-f docker/example/docker-compose.yml)
+      fi
     fi
-    build_args=()
-    [[ "${BUILD:-0}" == "1" ]] && build_args+=(--build)
     if [[ "$action" == "prod" ]]; then
-      docker compose "${COMPOSE_FILES[@]}" up -d "${build_args[@]}"
+      docker compose --env-file .env "${COMPOSE_FILES[@]}" pull
+      docker compose --env-file .env "${COMPOSE_FILES[@]}" up -d
     else
+      build_args=()
+      [[ "${BUILD:-0}" == "1" ]] && build_args+=(--build)
       docker compose "${COMPOSE_FILES[@]}" up "${build_args[@]}"
     fi
     ;;

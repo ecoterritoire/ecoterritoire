@@ -78,8 +78,9 @@ Les surcharges sont séparées :
 - [docker-compose.dev.yml](../docker-compose.dev.yml) expose les services
   localement, active le rechargement automatique de FastAPI et ajoute
   RedisInsight ;
-- [docker-compose.prod.yml](../docker-compose.prod.yml) utilise plusieurs
-  workers, des redémarrages automatiques et n'expose que le service web.
+- [docker/example/docker-compose.yml](../docker/example/docker-compose.yml)
+  utilise les images GHCR, plusieurs workers, des redémarrages automatiques et
+  n'expose que le service web.
 
 Commandes recommandées :
 

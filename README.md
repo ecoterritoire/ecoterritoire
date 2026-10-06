@@ -42,8 +42,27 @@ Production :
 ```bash
 cp .env.prod.example .env
 # Remplacez toutes les valeurs secrètes dans .env
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+docker compose --env-file .env -f docker/example/docker-compose.yml up -d
 ```
+
+Les images de production sont publiées automatiquement dans GitHub Container
+Registry par GitHub Actions après un push sur `main`. Pour les utiliser sans
+rebuild local, connectez Docker à GHCR puis définissez le préfixe d'image et le
+tag à déployer :
+
+```bash
+echo "$CR_PAT" | docker login ghcr.io -u "$GITHUB_USER" --password-stdin
+export GHCR_IMAGE_PREFIX=ghcr.io/ecoterritoire/ecoterritoire
+export IMAGE_TAG=latest
+docker compose --env-file .env -f docker/example/docker-compose.yml pull
+docker compose --env-file .env -f docker/example/docker-compose.yml up -d
+```
+
+Le workflow CI exécute les tests avec couverture et l'analyse SonarQube sur les
+pull requests. Configurez les secrets GitHub `SONAR_TOKEN` et `SONAR_HOST_URL`,
+et activez le Quality Gate SonarQube comme règle obligatoire de la branche
+`main`. Les images `api`, `web` et `db` sont publiées dans GHCR après le
+passage de cette CI sur `main`.
 
 La production n'expose pas PostgreSQL, InfluxDB ou Redis directement. Elle
 n'active pas `--reload`, utilise plusieurs workers API, redémarre les services
@@ -55,7 +74,6 @@ Un script simplifie ces commandes :
 ./script/docker.sh dev
 BUILD=1 ./script/docker.sh dev
 ./script/docker.sh prod
-BUILD=1 ./script/docker.sh prod
 ENV=dev ./script/docker.sh down
 ENV=prod ./script/docker.sh logs
 ```
