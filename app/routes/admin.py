@@ -13,7 +13,7 @@ from lib import admin as admin_db
 from lib.config import settings
 from lib.db import create_admin_session, generate_new_token, revoke_admin_session
 
-router = APIRouter(prefix="/admin", tags=["admin"])
+router = APIRouter(prefix="/admin", tags=["admin"], include_in_schema=False)
 templates = Jinja2Templates(
     directory=str(Path(__file__).resolve().parents[1] / "templates")
 )

@@ -25,6 +25,23 @@ class Settings:
         "INFLUXDB_MEASUREMENT",
         "pollution_air",
     )
+    realtime_source: str = os.getenv("REALTIME_SOURCE", "sensor_community")
+    realtime_source_url: str = os.getenv(
+        "REALTIME_SOURCE_URL",
+        "https://data.sensor.community/airrohr/v1/filter/country=FR",
+    )
+    realtime_source_token: str = os.getenv("REALTIME_SOURCE_TOKEN", "")
+    realtime_locations_json: str = os.getenv(
+        "REALTIME_LOCATIONS_JSON",
+        '[{"code_site":"paris","latitude":48.8566,"longitude":2.3522}]',
+    )
+    realtime_poll_interval_seconds: int = int(
+        os.getenv("REALTIME_POLL_INTERVAL_SECONDS", "60")
+    )
+    realtime_retention_seconds: int = int(
+        os.getenv("REALTIME_RETENTION_SECONDS", "900")
+    )
+    realtime_buffer_size: int = int(os.getenv("REALTIME_BUFFER_SIZE", "500"))
 
 
 settings = Settings()
