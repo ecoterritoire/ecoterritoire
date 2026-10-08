@@ -67,6 +67,23 @@ services:
         condition: service_healthy
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
 
+  realtime-collector:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      REALTIME_SOURCE: ${REALTIME_SOURCE:-sensor_community}
+      REALTIME_SOURCE_URL: ${REALTIME_SOURCE_URL:-https://data.sensor.community/airrohr/v1/filter/country=FR}
+      REALTIME_SOURCE_TOKEN: ${REALTIME_SOURCE_TOKEN:-}
+      REALTIME_POLL_INTERVAL_SECONDS: ${REALTIME_POLL_INTERVAL_SECONDS:-60}
+      REALTIME_RETENTION_SECONDS: ${REALTIME_RETENTION_SECONDS:-900}
+      REALTIME_BUFFER_SIZE: ${REALTIME_BUFFER_SIZE:-500}
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: python -m script.realtime_collector
+
   web:
     build:
       context: .

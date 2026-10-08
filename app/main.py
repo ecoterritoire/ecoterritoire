@@ -4,7 +4,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from app.routes import admin, auth, measurements, pollutants, pollution, stations
+from app.routes import admin, auth, measurements, pollutants, pollution, realtime, stations
 from lib.db import close_connection_pool, init_db
 
 
@@ -28,8 +28,4 @@ app.include_router(stations.router)
 app.include_router(pollutants.router)
 app.include_router(pollution.router)
 app.include_router(measurements.router)
-
-
-@app.get("/health", tags=["health"])
-def health_check() -> dict[str, str]:
-    return {"status": "ok"}
+app.include_router(realtime.router)

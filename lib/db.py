@@ -8,6 +8,8 @@ from pathlib import Path
 
 from typing import Any
 
+from dotenv import load_dotenv
+
 try:
     import psycopg2
     from psycopg2 import pool
@@ -19,9 +21,11 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+load_dotenv()
+
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql://ecoterritoire:ecoterritoire@localhost:5432/ecoterritoire",
+    "postgresql://localhost:5433/ecoterritoire",
 )
 
 _connection_pool: pool.ThreadedConnectionPool | None = None

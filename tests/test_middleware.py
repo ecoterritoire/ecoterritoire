@@ -23,24 +23,19 @@ class TestAuthDependency(unittest.TestCase):
 
         client = TestClient(app)
 
-        # 1. Route publique /health
-        res_health = client.get("/health")
-        self.assertEqual(res_health.status_code, 200)
-        self.assertEqual(res_health.json(), {"status": "ok"})
-
-        # 2. Route protegee sans header Authorization
+        # 1. Route protegee sans header Authorization
         res_missing = client.get("/measurements")
         self.assertEqual(res_missing.status_code, 401)
         self.assertEqual(res_missing.json(), {"detail": "Missing Authorization header"})
 
-        # 3. Route protegee avec mauvais format d'en-tete
+        # 2. Route protegee avec mauvais format d'en-tete
         res_bad_format = client.get(
             "/measurements", headers={"Authorization": "Basic dXNlcjpwYXNz"}
         )
         self.assertEqual(res_bad_format.status_code, 401)
         self.assertIn("Invalid Authorization header format", res_bad_format.json()["detail"])
 
-        # 4. Route protegee avec token inexistant / invalide
+        # 3. Route protegee avec token inexistant / invalide
         with patch("app.security.auth.verify_token_hash", return_value=None):
             res_invalid = client.get(
                 "/measurements", headers={"Authorization": "Bearer invalid_token"}
@@ -51,7 +46,7 @@ class TestAuthDependency(unittest.TestCase):
                 {"detail": "Invalid or inactive authentication token"},
             )
 
-        # 5. Route protegee avec token valide
+        # 4. Route protegee avec token valide
         raw_token = "eco_valid_token_abc"
         expected_hash = hash_token(raw_token)
         mock_record = {

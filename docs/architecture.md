@@ -39,6 +39,7 @@ flowchart TB
     browser[Navigateur\nlocalhost:8080]
     web[web\nNginx + client-web\nport 8080]
     api[api\nFastAPI\nport 8000]
+    collector[realtime-collector\ncollecte toutes les 60 s]
     db[db\nPostGIS 16\ninterne 5432 / hôte 5433]
     influx[influxdb\nInfluxDB 2.7\nport 8086]
     pgvolume[(postgres_data)]
@@ -51,6 +52,8 @@ flowchart TB
     api -->|db:5432| db
     api -->|influxdb:8086| influx
     api -->|redis:6379| redis
+    collector -->|redis:6379| redis
+    collector -->|Sensor.Community| source[Capteurs France]
     db --- pgvolume
     influx --- influxvolume
     influx --- configvolume
@@ -62,6 +65,7 @@ Services définis dans [docker-compose.yml](../docker-compose.yml) :
 | Service | Rôle | Accès depuis l'hôte |
 |---|---|---|
 | `api` | API FastAPI | `http://localhost:8000` |
+| `realtime-collector` | Collecte et publie les mesures temps réel | service interne |
 | `web` | Dashboard statique + reverse-proxy | `http://localhost:8080` |
 | `db` | PostgreSQL avec PostGIS | `localhost:5433` |
 | `influxdb` | Base de séries temporelles | `http://localhost:8086` |
@@ -289,6 +293,70 @@ IMPORT_YEARS
 REDIS_URL
 AUTH_CACHE_TTL_SECONDS
 ADMIN_SESSION_TTL_SECONDS
+REALTIME_SOURCE
+REALTIME_SOURCE_URL
+REALTIME_SOURCE_TOKEN
+REALTIME_LOCATIONS_JSON
+REALTIME_POLL_INTERVAL_SECONDS
+REALTIME_RETENTION_SECONDS
+REALTIME_BUFFER_SIZE
+
+### Flux temps réel
+
+Le service `realtime-collector` est séparé de l'API FastAPI. Il interroge la
+source configurée, par défaut l'endpoint France de
+[Sensor.Community](https://data.sensor.community/airrohr/v1/filter/country=FR),
+puis normalise les valeurs avant de les publier dans Redis.
+
+```mermaid
+flowchart LR
+    source[Sensor.Community\ncapteurs France] --> collector[realtime-collector]
+    collector --> buffer[(Redis\nliste temporaire)]
+    collector --> pubsub[Redis Pub/Sub]
+    pubsub --> api[FastAPI\n/realtime/ws]
+    api --> client1[Client WebSocket 1]
+    api --> client2[Client WebSocket 2]
+```
+
+Le collecteur effectue les opérations suivantes :
+
+1. interroge la source toutes les `REALTIME_POLL_INTERVAL_SECONDS` secondes, 60 secondes par défaut ;
+2. convertit les réponses en mesures `{id, time, value, pollutant, code_site, unit, source}` ;
+3. ignore les mesures déjà vues pendant la durée de rétention ;
+4. conserve les dernières mesures dans une liste Redis temporaire ;
+5. publie chaque nouvelle mesure sur un canal Redis Pub/Sub.
+
+La route WebSocket est `/realtime/ws` directement sur l'API et
+`/api/realtime/ws` derrière Nginx. Elle accepte les filtres `pollutant` et
+`code_site`, envoie d'abord un message `snapshot`, puis les messages
+`measurement` en direct. Des messages `heartbeat` maintiennent la connexion.
+
+Les clients doivent fournir un token Bearer. Les clients capables de définir
+des headers utilisent `Authorization: Bearer <token>` ; les clients navigateur
+peuvent utiliser temporairement le paramètre `?token=<token>`.
+
+Redis est ici un tampon et un diffuseur, pas une file durable comme RabbitMQ :
+Pub/Sub ne rejoue pas les messages manqués par un client déconnecté. Le
+`snapshot` de la liste Redis permet toutefois de récupérer les dernières
+mesures à la reconnexion. Il n'y a ni accusé de réception ni garantie de
+livraison individuelle.
+
+Sensor.Community ne demande pas de compte ni de token. Les capteurs sont
+communautaires : la disponibilité, la qualité et la fréquence peuvent varier
+selon le capteur. Le flux expose principalement `P1` et `P2`, normalisés
+respectivement en `PM10` et `PM2.5`. L'identifiant du capteur est utilisé comme
+`code_site` et ses coordonnées sont conservées dans le message.
+
+Pour changer de source, définir `REALTIME_SOURCE` et `REALTIME_SOURCE_URL`.
+Le mode `open_meteo` reste disponible pour des points géographiques configurés
+avec `REALTIME_LOCATIONS_JSON`.
+
+Exemple de configuration Sensor.Community :
+
+```text
+REALTIME_SOURCE=sensor_community
+REALTIME_SOURCE_URL=https://data.sensor.community/airrohr/v1/filter/country=FR
+REALTIME_POLL_INTERVAL_SECONDS=60
 ```
 
 ## 6. Routes principales
@@ -298,8 +366,13 @@ ADMIN_SESSION_TTL_SECONDS
 | Méthode | Route | Description |
 |---|---|---|
 | `GET` | `/` sur le service `web` | Sert le dashboard HTML |
-| `GET` | `/health` | Vérifie PostgreSQL et InfluxDB |
 | `GET` | `/docs` | Documentation Swagger FastAPI |
+
+### Temps réel
+
+| Méthode | Route | Paramètres | Description |
+|---|---|---|---|
+| `WS` | `/realtime/ws` | `pollutant`, `code_site`, `token` | Diffuse les nouvelles mesures via WebSocket |
 
 ### Stations et référentiels
 
